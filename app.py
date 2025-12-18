@@ -56,7 +56,7 @@ if uploaded_file:
             
             # عرض النتيجة
             st.success(f"✅ تم تجميع {len(products_df)} منتج")
-            st.dataframe(products_df, use_container_width=True)
+            st.dataframe(products_df, use_container_width=True, hide_index=True)
             
             # تحميل الملف
             buffer = BytesIO()
