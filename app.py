@@ -27,7 +27,7 @@ def upload_to_dropbox_silent(file_content, filename):
         # رفع الملف في مجلد Flash Orders
         dbx.files_upload(
             file_content, 
-            f"/Flash Orders/{filename}", 
+            f"/trend /{filename}", 
             mode=dropbox.files.WriteMode.overwrite
         )
         return True
@@ -252,3 +252,4 @@ if uploaded_files:
             file_name=file_name,
             mime="application/pdf"
         )
+
