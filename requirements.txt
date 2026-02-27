@@ -1,9 +1,8 @@
 streamlit
 pandas
 openpyxl
-reportlab
 arabic-reshaper
 python-bidi
+reportlab
 pytz
 dropbox
-
