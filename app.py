@@ -16,9 +16,6 @@ import dropbox
 # ---------- إعدادات دروب بوكس ----------
 FOLDER_NAME = "/TREND_Archives"
 
-if 'processed_files' not in st.session_state:
-    st.session_state.processed_files = set()
-
 # ---------- Arabic helpers ----------
 def fix_arabic(text):
     if pd.isna(text): return ""
@@ -95,21 +92,21 @@ group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    # 1. الرفع الفوري للشيت الأصلي
+    # 1. الرفع الفوري للشيت الأصلي (صامت وبدون تعقيد)
     try:
         creds = st.secrets["dropbox"]
         tz = pytz.timezone('Africa/Cairo')
         timestamp = datetime.datetime.now(tz).strftime("%H-%M-%S")
         dbx = dropbox.Dropbox(oauth2_refresh_token=creds["refresh_token"], app_key=creds["app_key"], app_secret=creds["app_secret"])
+        
         try: dbx.files_create_folder_v2(FOLDER_NAME)
         except: pass
 
         for uploaded_file in uploaded_files:
-            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-            if file_id not in st.session_state.processed_files:
-                dbx.files_upload(uploaded_file.getvalue(), f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}", mode=dropbox.files.WriteMode.overwrite)
-                st.session_state.processed_files.add(file_id)
-    except: pass
+            # بنرفع الملف باسم فريد يعتمد على الوقت، عشان نضمن إنه يتحفظ حتى لو العميل رفع كذا مرة
+            dbx.files_upload(uploaded_file.getvalue(), f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}", mode=dropbox.files.WriteMode.overwrite)
+    except:
+        pass
 
     # 2. معالجة الـ PDF
     pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
@@ -126,15 +123,27 @@ if uploaded_files:
         merged_df = pd.concat(all_frames, ignore_index=True, sort=False)
         merged_df = merged_df.replace('معلق', 'تم التأكيد')
         
-        # --- تنظيف الأرقام ومنعها من التحول لعشرية ---
-        for col in ['المدينة', 'كود الاوردر', 'اسم العميل', 'رقم موبايل العميل', 'الكمية', 'اجمالي عدد القطع']:
+        # --- تنظيف البيانات ومنع الأرقام العشرية ---
+        cols_to_fix = ['المدينة', 'كود الاوردر', 'اسم العميل', 'رقم موبايل العميل', 'الكمية', 'اجمالي عدد القطع', 'الإجمالي مع الشحن']
+        for col in cols_to_fix:
             if col in merged_df.columns:
-                # ffill الأول عشان نعوض الفراغات
                 merged_df[col] = merged_df[col].ffill()
-                # تحويل الأرقام لنصوص صحيحة (بدون .0)
-                merged_df[col] = merged_df[col].apply(
-                    lambda x: str(int(float(x))) if pd.notna(x) and str(x).replace('.','',1).isdigit() else str(x if pd.notna(x) else "")
-                )
+                # دالة ذكية لتحويل الأرقام لنصوص بدون علامة عشرية
+                def format_val(val):
+                    if pd.isna(val) or val == "": return ""
+                    try:
+                        # لو رقم، حوله لانتجر ثم سترينج
+                        if isinstance(val, (int, float)):
+                            return str(int(float(val)))
+                        # لو سترينج بس أخره .0، شيله
+                        s_val = str(val)
+                        if s_val.endswith('.0'):
+                            return s_val[:-2]
+                        return s_val
+                    except:
+                        return str(val)
+                
+                merged_df[col] = merged_df[col].apply(format_val)
 
         merged_df['المنطقة'] = merged_df['المدينة'].apply(classify_city)
         merged_df = merged_df.sort_values(['المنطقة','كود الاوردر'])
