@@ -152,10 +152,10 @@ if uploaded_files:
         today_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
 
         # الرسالة الوحيدة اللي بتظهر هي إن الـ PDF جاهز للتحميل
-        st.success("✅ البيانات جاهزة ✅")
         st.download_button(
-            label="⬇️⬇️ تحميل ملف PDF للمناديب",
+            label="⬇️⬇️ تحميل ملف PDF ",
             data=pdf_data,
             file_name=f"سواقين {group_name} - {today_date}.pdf",
             mime="application/pdf"
         )
+
