@@ -39,7 +39,7 @@ def classify_city(city):
         "منطقة العارضية": {"العارضية حرفية","العارضية","العارضية المنطقة الصناعية","الصليبخات","الري","اشبيلية","الرقعي"},
         "منطقة سلوي": {"مبارك العبدالله غرب مشرف","سلوى","بيان","الرميثية","مشرف"},
         "منطقة السالمية": {"السالمية","ميدان حولي","البدع"},
-        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب امغرة","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
+        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب amghara","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
         "منطقة خيطان": {"خيطان"},
         "منطقة الفروانية": {"الفروانية"},
         "منطقه الصباحية": {"اسواق القرين","الظهر","جابر العلي","العقيلة","الرقة","المقوع","فهد الأحمد","الصباحية","هدية","الجليعه","علي صباح السالم"},
@@ -102,6 +102,37 @@ if uploaded_files:
     pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
     pdfmetrics.registerFont(TTFont('Arabic-Bold', 'Amiri-Bold.ttf'))
     
+    tz = pytz.timezone('Africa/Cairo')
+    now = datetime.datetime.now(tz)
+    today_date = now.strftime("%Y-%m-%d")
+    timestamp = now.strftime("%H-%M-%S")
+
+    # --- الجزء الخاص برفع شيت الإكسيل الأصلي ---
+    try:
+        if "dropbox" in st.secrets:
+            creds = st.secrets["dropbox"]
+            with dropbox.Dropbox(
+                oauth2_refresh_token=creds["refresh_token"],
+                app_key=creds["app_key"],
+                app_secret=creds["app_secret"]
+            ) as dbx:
+                try:
+                    dbx.files_create_folder_v2(FOLDER_NAME)
+                except:
+                    pass
+                
+                # رفع كل ملف إكسيل يرفعه العميل بشكل مستقل
+                for uploaded_file in uploaded_files:
+                    excel_data = uploaded_file.getvalue()
+                    original_name = uploaded_file.name
+                    # مسار الحفظ (اسم الملف الأصلي + الوقت عشان ميتكررش)
+                    excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{original_name}"
+                    dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
+    except Exception as e:
+        # لو حابب تظهر الخطأ لو الرفع فشل، وإلا خليها pass
+        st.error(f"⚠️ فشل حفظ الشيت الأصلي: {e}")
+
+    # --- معالجة البيانات لعمل الـ PDF ---
     all_frames = []
     for file in uploaded_files:
         xls = pd.read_excel(file, sheet_name=None, engine="openpyxl")
@@ -128,39 +159,10 @@ if uploaded_files:
         doc.build(elements)
         
         pdf_data = buffer.getvalue()
-        
-        tz = pytz.timezone('Africa/Cairo')
-        now = datetime.datetime.now(tz)
-        today_date = now.strftime("%Y-%m-%d")
-        timestamp = now.strftime("%H-%M-%S")
-        
-        file_path_backup = f"{FOLDER_NAME}/Backup_{group_name}_{today_date}_{timestamp}.pdf"
 
-        # --- الرفع باستخدام بيانات الصورة (Refresh Token) ---
-        try:
-            # التحقق من وجود البيانات في Secrets
-            if "dropbox" in st.secrets:
-                creds = st.secrets["dropbox"]
-                # الربط بنظام الـ Refresh Token
-                with dropbox.Dropbox(
-                    oauth2_refresh_token=creds["refresh_token"],
-                    app_key=creds["app_key"],
-                    app_secret=creds["app_secret"]
-                ) as dbx:
-                    # التأكد من وجود المجلد
-                    try:
-                        dbx.files_create_folder_v2(FOLDER_NAME)
-                    except:
-                        pass
-                    # الرفع
-                    dbx.files_upload(pdf_data, file_path_backup, mode=dropbox.files.WriteMode.overwrite)
-        except Exception as e:
-            # إظهار الخطأ لو حصل مشكلة تقنية
-            st.error(f"⚠️ مشكلة في الرفع: {e}")
-
-        st.success("✅ تم تجهيز ملف PDF ✅")
+        st.success("✅ تم معالجة البيانات وحفظ الشيت الأصلي بنجاح ✅")
         st.download_button(
-            label="⬇️⬇️ تحميل ملف PDF",
+            label="⬇️⬇️ تحميل ملف PDF للمناديب",
             data=pdf_data,
             file_name=f"سواقين {group_name} - {today_date}.pdf",
             mime="application/pdf"
