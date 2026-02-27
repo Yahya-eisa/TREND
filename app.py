@@ -13,8 +13,11 @@ from reportlab.pdfbase import pdfmetrics
 import pytz
 import dropbox
 
-# ---------- إعدادات دروب بوكس ----------
 FOLDER_NAME = "/TREND_Archives"
+
+# منع التكرار باستخدام الذاكرة المؤقتة
+if 'uploaded_files_history' not in st.session_state:
+    st.session_state.uploaded_files_history = []
 
 # ---------- Arabic helpers ----------
 def fix_arabic(text):
@@ -33,7 +36,7 @@ def classify_city(city):
         "منطقة العارضية": {"العارضية حرفية","العارضية","العارضية المنطقة الصناعية","الصليبخات","الري","اشبيلية","الرقعي"},
         "منطقة سلوي": {"مبارك العبدالله غرب مشرف","سلوى","بيان","الرميثية","مشرف"},
         "منطقة السالمية": {"السالمية","ميدان حولي","البدع"},
-        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب امغرة","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
+        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب amghara","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
         "منطقة خيطان": {"خيطان"},
         "منطقة الفروانية": {"الفروانية"},
         "منطقه الصباحية": {"اسواق القرين","الظهر","جابر العلي","العقيلة","الرقة","المقوع","فهد الأحمد","الصباحية","هدية","الجليعه","علي صباح السالم"},
@@ -87,17 +90,12 @@ def df_to_pdf_table(df, title="TREND", group_name="TREND"):
 st.set_page_config(page_title="TREND Orders Processor", page_icon="🔥", layout="wide")
 st.title("🔥 TREND Orders Processor")
 
-# الذاكرة لمنع تكرار الرفع
-if 'uploaded_log' not in st.session_state:
-    st.session_state.uploaded_log = []
-
 group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    # 1. المرحلة الأولى: الرفع الفوري للشيت الأصلي
     current_files_ids = [f.name + str(f.size) for f in uploaded_files]
-    if current_files_ids != st.session_state.uploaded_log:
+    if current_files_ids != st.session_state.uploaded_files_history:
         try:
             creds = st.secrets["dropbox"]
             tz = pytz.timezone('Africa/Cairo')
@@ -116,11 +114,11 @@ if uploaded_files:
                     excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}"
                     dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
             
-            st.session_state.uploaded_log = current_files_ids
-        except Exception as e:
-            st.error(f"⚠️ فشل الرفع لـ Dropbox: {e}")
+            st.session_state.uploaded_files_history = current_files_ids
+        except:
+            pass
 
-    # 2. المرحلة الثانية: معالجة البيانات والـ PDF
+    # --- معالجة الـ PDF ---
     pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
     pdfmetrics.registerFont(TTFont('Arabic-Bold', 'Amiri-Bold.ttf'))
     
@@ -153,7 +151,8 @@ if uploaded_files:
         tz = pytz.timezone('Africa/Cairo')
         today_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
 
-        st.success("✅ تم حفظ الشيتات الأصلية في Dropbox ومعالجة الـ PDF ✅")
+        # الرسالة الوحيدة اللي بتظهر هي إن الـ PDF جاهز للتحميل
+        st.success("✅ البيانات جاهزة ✅")
         st.download_button(
             label="⬇️⬇️ تحميل ملف PDF للمناديب",
             data=pdf_data,
