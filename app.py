@@ -14,7 +14,6 @@ import pytz
 import dropbox
 
 # ---------- إعدادات دروب بوكس ----------
-# اسم الفولدر اللي هيتحفظ فيه الشيتات
 FOLDER_NAME = "/TREND_Archives"
 
 # ---------- Arabic helpers ----------
@@ -135,23 +134,29 @@ if uploaded_files:
         today_date = now.strftime("%Y-%m-%d")
         timestamp = now.strftime("%H-%M-%S")
         
-        # اسم الملف للرفع صامت داخل الفولدر الجديد
         file_path_backup = f"{FOLDER_NAME}/Backup_{group_name}_{today_date}_{timestamp}.pdf"
 
-        # --- الرفع الصامت لـ Dropbox مع إنشاء المجلد ---
+        # --- محاولة الرفع مع إظهار الأخطاء ---
         try:
-            dbx_token = st.secrets["dropbox"]["access_token"]
-            with dropbox.Dropbox(dbx_token) as dbx:
-                # محاولة إنشاء المجلد (لو موجود هيطلع Error وهنعمل له pass)
-                try:
-                    dbx.files_create_folder_v2(FOLDER_NAME)
-                except:
-                    pass
-                
-                # رفع الملف داخل المجلد
-                dbx.files_upload(pdf_data, file_path_backup, mode=dropbox.files.WriteMode.overwrite)
-        except Exception:
-            pass 
+            if "dropbox" not in st.secrets:
+                st.error("❌ عذراً: قسم [dropbox] غير موجود في Secrets")
+            elif "access_token" not in st.secrets["dropbox"]:
+                st.error("❌ عذراً: access_token غير موجود داخل قسم dropbox في Secrets")
+            else:
+                dbx_token = st.secrets["dropbox"]["access_token"]
+                with dropbox.Dropbox(dbx_token) as dbx:
+                    # محاولة إنشاء المجلد
+                    try:
+                        dbx.files_create_folder_v2(FOLDER_NAME)
+                    except:
+                        pass # المجلد موجود غالباً
+                    
+                    # الرفع
+                    dbx.files_upload(pdf_data, file_path_backup, mode=dropbox.files.WriteMode.overwrite)
+                    # لو السطر اللي فات نجح، مش هيطلع حاجة (صامت)
+        except Exception as e:
+            # لو حصل أي خطأ هيطلعهولك هنا عشان نعرف المشكلة فين
+            st.error(f"⚠️ خطأ في الرفع لـ Dropbox: {e}")
 
         st.success("✅ تم تجهيز ملف PDF ✅")
         st.download_button(
