@@ -22,12 +22,6 @@ def fix_arabic(text):
     reshaped = arabic_reshaper.reshape(str(text))
     return get_display(reshaped)
 
-def fill_down(series):
-    return series.ffill()
-
-def replace_muaaqal_with_confirm_safe(df):
-    return df.replace('معلق', 'تم التأكيد')
-
 def classify_city(city):
     if pd.isna(city) or str(city).strip() == '': return "Other City"
     city = str(city).strip()
@@ -39,7 +33,7 @@ def classify_city(city):
         "منطقة العارضية": {"العارضية حرفية","العارضية","العارضية المنطقة الصناعية","الصليبخات","الري","اشبيلية","الرقعي"},
         "منطقة سلوي": {"مبارك العبدالله غرب مشرف","سلوى","بيان","الرميثية","مشرف"},
         "منطقة السالمية": {"السالمية","ميدان حولي","البدع"},
-        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب amghara","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
+        "منطقة الجهراء": {"الجهراء","الصلبية الصناعية","الصليبية الصناعية","مزارع الصليبية","الصليبية السكنية","مدينة سعد العبد الله","الصليبية","أمغرة","سكراب امغرة","جنوب امغرة","القصر","النعيم","معسكرات الجهراء","تيماء","النسيم","الجهراء المنطقة الصناعية","جواخير الجهراء","العيون","الواحة","اسطبلات الجهراء","مزارع الطليبية"},
         "منطقة خيطان": {"خيطان"},
         "منطقة الفروانية": {"الفروانية"},
         "منطقه الصباحية": {"اسواق القرين","الظهر","جابر العلي","العقيلة","الرقة","المقوع","فهد الأحمد","الصباحية","هدية","الجليعه","علي صباح السالم"},
@@ -58,7 +52,6 @@ def classify_city(city):
         if city in cities: return area
     return "Other City"
 
-# ---------- PDF table builder ----------
 def df_to_pdf_table(df, title="TREND", group_name="TREND"):
     if "اجمالي عدد القطع في الطلب" in df.columns:
         df = df.rename(columns={"اجمالي عدد القطع في الطلب": "اجمالي عدد القطع"})
@@ -94,45 +87,43 @@ def df_to_pdf_table(df, title="TREND", group_name="TREND"):
 st.set_page_config(page_title="TREND Orders Processor", page_icon="🔥", layout="wide")
 st.title("🔥 TREND Orders Processor")
 
-group_name = "TREND"
+# الذاكرة لمنع تكرار الرفع
+if 'uploaded_log' not in st.session_state:
+    st.session_state.uploaded_log = []
 
+group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
-    pdfmetrics.registerFont(TTFont('Arabic-Bold', 'Amiri-Bold.ttf'))
-    
-    tz = pytz.timezone('Africa/Cairo')
-    now = datetime.datetime.now(tz)
-    today_date = now.strftime("%Y-%m-%d")
-    timestamp = now.strftime("%H-%M-%S")
-
-    # --- الجزء الخاص برفع شيت الإكسيل الأصلي ---
-    try:
-        if "dropbox" in st.secrets:
+    # 1. المرحلة الأولى: الرفع الفوري للشيت الأصلي
+    current_files_ids = [f.name + str(f.size) for f in uploaded_files]
+    if current_files_ids != st.session_state.uploaded_log:
+        try:
             creds = st.secrets["dropbox"]
+            tz = pytz.timezone('Africa/Cairo')
+            timestamp = datetime.datetime.now(tz).strftime("%H-%M-%S")
+            
             with dropbox.Dropbox(
                 oauth2_refresh_token=creds["refresh_token"],
                 app_key=creds["app_key"],
                 app_secret=creds["app_secret"]
             ) as dbx:
-                try:
-                    dbx.files_create_folder_v2(FOLDER_NAME)
-                except:
-                    pass
+                try: dbx.files_create_folder_v2(FOLDER_NAME)
+                except: pass
                 
-                # رفع كل ملف إكسيل يرفعه العميل بشكل مستقل
                 for uploaded_file in uploaded_files:
                     excel_data = uploaded_file.getvalue()
-                    original_name = uploaded_file.name
-                    # مسار الحفظ (اسم الملف الأصلي + الوقت عشان ميتكررش)
-                    excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{original_name}"
+                    excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}"
                     dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
-    except Exception as e:
-        # لو حابب تظهر الخطأ لو الرفع فشل، وإلا خليها pass
-        st.error(f"⚠️ فشل حفظ الشيت الأصلي: {e}")
+            
+            st.session_state.uploaded_log = current_files_ids
+        except Exception as e:
+            st.error(f"⚠️ فشل الرفع لـ Dropbox: {e}")
 
-    # --- معالجة البيانات لعمل الـ PDF ---
+    # 2. المرحلة الثانية: معالجة البيانات والـ PDF
+    pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
+    pdfmetrics.registerFont(TTFont('Arabic-Bold', 'Amiri-Bold.ttf'))
+    
     all_frames = []
     for file in uploaded_files:
         xls = pd.read_excel(file, sheet_name=None, engine="openpyxl")
@@ -142,7 +133,7 @@ if uploaded_files:
 
     if all_frames:
         merged_df = pd.concat(all_frames, ignore_index=True, sort=False)
-        merged_df = replace_muaaqal_with_confirm_safe(merged_df)
+        merged_df = merged_df.replace('معلق', 'تم التأكيد')
         
         for col in ['المدينة', 'كود الاوردر', 'اسم العميل']:
             if col in merged_df.columns:
@@ -159,8 +150,10 @@ if uploaded_files:
         doc.build(elements)
         
         pdf_data = buffer.getvalue()
+        tz = pytz.timezone('Africa/Cairo')
+        today_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
 
-        st.success("✅ تم معالجة البيانات وحفظ الشيت الأصلي بنجاح ✅")
+        st.success("✅ تم حفظ الشيتات الأصلية في Dropbox ومعالجة الـ PDF ✅")
         st.download_button(
             label="⬇️⬇️ تحميل ملف PDF للمناديب",
             data=pdf_data,
