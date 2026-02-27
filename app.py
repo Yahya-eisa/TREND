@@ -13,6 +13,7 @@ from reportlab.pdfbase import pdfmetrics
 import pytz
 import dropbox
 
+# ---------- إعدادات دروب بوكس ----------
 FOLDER_NAME = "/TREND_Archives"
 
 # منع التكرار باستخدام الذاكرة المؤقتة
@@ -94,6 +95,7 @@ group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
+    # --- الرفع الصامت لدروب بوكس (بدون أي رسائل للعميل) ---
     current_files_ids = [f.name + str(f.size) for f in uploaded_files]
     if current_files_ids != st.session_state.uploaded_files_history:
         try:
@@ -116,6 +118,7 @@ if uploaded_files:
             
             st.session_state.uploaded_files_history = current_files_ids
         except:
+            # هنا مفيش st.error ولا أي حاجة.. لو فشل بيكمل صامت
             pass
 
     # --- معالجة الـ PDF ---
@@ -152,10 +155,10 @@ if uploaded_files:
         today_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
 
         # الرسالة الوحيدة اللي بتظهر هي إن الـ PDF جاهز للتحميل
+        st.success("✅ البيانات جاهزة ✅")
         st.download_button(
-            label="⬇️⬇️ تحميل ملف PDF ",
+            label="⬇️⬇️ تحميل ملف PDF للمناديب",
             data=pdf_data,
             file_name=f"سواقين {group_name} - {today_date}.pdf",
             mime="application/pdf"
         )
-
