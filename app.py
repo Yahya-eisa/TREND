@@ -13,7 +13,7 @@ from reportlab.pdfbase import pdfmetrics
 import pytz
 import dropbox
 
-# ---------- إعدادات دروب بوكس ----------
+# --------------------
 FOLDER_NAME = "/TREND_Archives"
 
 # ---------- Arabic helpers ----------
@@ -92,7 +92,7 @@ group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    # 1. الرفع الفوري للشيت الأصلي (صامت وبدون تعقيد)
+    #   1
     try:
         creds = st.secrets["dropbox"]
         tz = pytz.timezone('Africa/Cairo')
@@ -103,7 +103,7 @@ if uploaded_files:
         except: pass
 
         for uploaded_file in uploaded_files:
-            # بنرفع الملف باسم فريد يعتمد على الوقت، عشان نضمن إنه يتحفظ حتى لو العميل رفع كذا مرة
+            # 2
             dbx.files_upload(uploaded_file.getvalue(), f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}", mode=dropbox.files.WriteMode.overwrite)
     except:
         pass
@@ -166,3 +166,4 @@ if uploaded_files:
             file_name=f"سواقين {group_name} - {today_date}.pdf",
             mime="application/pdf"
         )
+
