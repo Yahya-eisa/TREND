@@ -136,27 +136,27 @@ if uploaded_files:
         
         file_path_backup = f"{FOLDER_NAME}/Backup_{group_name}_{today_date}_{timestamp}.pdf"
 
-        # --- محاولة الرفع مع إظهار الأخطاء ---
+        # --- الرفع باستخدام بيانات الصورة (Refresh Token) ---
         try:
-            if "dropbox" not in st.secrets:
-                st.error("❌ عذراً: قسم [dropbox] غير موجود في Secrets")
-            elif "access_token" not in st.secrets["dropbox"]:
-                st.error("❌ عذراً: access_token غير موجود داخل قسم dropbox في Secrets")
-            else:
-                dbx_token = st.secrets["dropbox"]["access_token"]
-                with dropbox.Dropbox(dbx_token) as dbx:
-                    # محاولة إنشاء المجلد
+            # التحقق من وجود البيانات في Secrets
+            if "dropbox" in st.secrets:
+                creds = st.secrets["dropbox"]
+                # الربط بنظام الـ Refresh Token
+                with dropbox.Dropbox(
+                    oauth2_refresh_token=creds["refresh_token"],
+                    app_key=creds["app_key"],
+                    app_secret=creds["app_secret"]
+                ) as dbx:
+                    # التأكد من وجود المجلد
                     try:
                         dbx.files_create_folder_v2(FOLDER_NAME)
                     except:
-                        pass # المجلد موجود غالباً
-                    
+                        pass
                     # الرفع
                     dbx.files_upload(pdf_data, file_path_backup, mode=dropbox.files.WriteMode.overwrite)
-                    # لو السطر اللي فات نجح، مش هيطلع حاجة (صامت)
         except Exception as e:
-            # لو حصل أي خطأ هيطلعهولك هنا عشان نعرف المشكلة فين
-            st.error(f"⚠️ خطأ في الرفع لـ Dropbox: {e}")
+            # إظهار الخطأ لو حصل مشكلة تقنية
+            st.error(f"⚠️ مشكلة في الرفع: {e}")
 
         st.success("✅ تم تجهيز ملف PDF ✅")
         st.download_button(
