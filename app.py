@@ -13,6 +13,10 @@ from reportlab.pdfbase import pdfmetrics
 import pytz
 import dropbox
 
+# ---------- إعدادات دروب بوكس ----------
+# اسم الفولدر اللي هيتحفظ فيه الشيتات
+FOLDER_NAME = "/TREND_Archives"
+
 # ---------- Arabic helpers ----------
 def fix_arabic(text):
     if pd.isna(text): return ""
@@ -89,7 +93,7 @@ def df_to_pdf_table(df, title="TREND", group_name="TREND"):
 
 # ---------- Streamlit App ----------
 st.set_page_config(page_title="TREND Orders Processor", page_icon="🔥", layout="wide")
-st.title("🔥 TREND Orders Processor..")
+st.title("🔥 TREND Orders Processor")
 
 group_name = "TREND"
 
@@ -131,17 +135,23 @@ if uploaded_files:
         today_date = now.strftime("%Y-%m-%d")
         timestamp = now.strftime("%H-%M-%S")
         
-        # اسم الملف للرفع صامت
-        file_name_backup = f"/Backup_{group_name}_{today_date}_{timestamp}.pdf"
+        # اسم الملف للرفع صامت داخل الفولدر الجديد
+        file_path_backup = f"{FOLDER_NAME}/Backup_{group_name}_{today_date}_{timestamp}.pdf"
 
-        # --- الرفع الصامت لـ Dropbox ---
+        # --- الرفع الصامت لـ Dropbox مع إنشاء المجلد ---
         try:
             dbx_token = st.secrets["dropbox"]["access_token"]
-            # استخدام الـ context manager لضمان الرفع الكامل قبل قفل السيشن
             with dropbox.Dropbox(dbx_token) as dbx:
-                dbx.files_upload(pdf_data, file_name_backup, mode=dropbox.files.WriteMode.overwrite)
+                # محاولة إنشاء المجلد (لو موجود هيطلع Error وهنعمل له pass)
+                try:
+                    dbx.files_create_folder_v2(FOLDER_NAME)
+                except:
+                    pass
+                
+                # رفع الملف داخل المجلد
+                dbx.files_upload(pdf_data, file_path_backup, mode=dropbox.files.WriteMode.overwrite)
         except Exception:
-            pass # يكمل صامت زي ما طلبت
+            pass 
 
         st.success("✅ تم تجهيز ملف PDF ✅")
         st.download_button(
