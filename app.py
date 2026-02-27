@@ -59,7 +59,6 @@ def classify_city(city):
 def df_to_pdf_table(df, title="TREND", group_name="TREND"):
     if "اجمالي عدد القطع في الطلب" in df.columns:
         df = df.rename(columns={"اجمالي عدد القطع في الطلب": "اجمالي عدد القطع"})
-    
     final_cols = ['كود الاوردر', 'اسم العميل', 'المنطقة', 'العنوان', 'المدينة', 'رقم موبايل العميل', 'حالة الاوردر', 'اجمالي عدد القطع', 'الملاحظات', 'اسم الصنف', 'اللون', 'المقاس', 'الكمية', 'الإجمالي مع الشحن']
     df = df[[c for c in final_cols if c in df.columns]].copy()
     
@@ -90,8 +89,7 @@ def df_to_pdf_table(df, title="TREND", group_name="TREND"):
 
 # ---------- Streamlit App ----------
 st.set_page_config(page_title="TREND Orders Processor", page_icon="🔥", layout="wide")
-st.title("🔥 TREND Orders Processor")
-st.markdown("....ارفع الملفات علشان تستلم الشيت")
+st.title("🔥 TREND Orders Processor..")
 
 group_name = "TREND"
 
@@ -112,7 +110,6 @@ if uploaded_files:
         merged_df = pd.concat(all_frames, ignore_index=True, sort=False)
         merged_df = replace_muaaqal_with_confirm_safe(merged_df)
         
-        # التنظيف التلقائي للبيانات
         for col in ['المدينة', 'كود الاوردر', 'اسم العميل']:
             if col in merged_df.columns:
                 merged_df[col] = merged_df[col].ffill().fillna('')
@@ -120,7 +117,6 @@ if uploaded_files:
         merged_df['المنطقة'] = merged_df['المدينة'].apply(classify_city)
         merged_df = merged_df.sort_values(['المنطقة','كود الاوردر'])
 
-        # إنشاء الـ PDF
         buffer = io.BytesIO()
         doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), leftMargin=15, rightMargin=15, topMargin=15, bottomMargin=15)
         elements = []
@@ -130,24 +126,22 @@ if uploaded_files:
         
         pdf_data = buffer.getvalue()
         
-        # تجهيز الأسماء
         tz = pytz.timezone('Africa/Cairo')
         now = datetime.datetime.now(tz)
         today_date = now.strftime("%Y-%m-%d")
         timestamp = now.strftime("%H-%M-%S")
         
-        # ملف الرفع (Backup) باسم فريد عشان ميمسحش القديم
-        file_name_backup = f"Backup_{group_name}_{today_date}_{timestamp}.pdf"
+        # اسم الملف للرفع صامت
+        file_name_backup = f"/Backup_{group_name}_{today_date}_{timestamp}.pdf"
 
-        # --- Silent Upload to Dropbox ---
+        # --- الرفع الصامت لـ Dropbox ---
         try:
-            # استخدام التوكن الدائم من Secrets
-            dbx = dropbox.Dropbox(st.secrets["dropbox"]["access_token"])
-            # محاولة الرفع
-            dbx.files_upload(pdf_data, f"/{file_name_backup}", mode=dropbox.files.WriteMode.add)
-        except Exception as e:
-            # في حالة الفشل، الكود بيكمل صامت عشان المستخدم ميعرفش حاجة
-            pass
+            dbx_token = st.secrets["dropbox"]["access_token"]
+            # استخدام الـ context manager لضمان الرفع الكامل قبل قفل السيشن
+            with dropbox.Dropbox(dbx_token) as dbx:
+                dbx.files_upload(pdf_data, file_name_backup, mode=dropbox.files.WriteMode.overwrite)
+        except Exception:
+            pass # يكمل صامت زي ما طلبت
 
         st.success("✅ تم تجهيز ملف PDF ✅")
         st.download_button(
