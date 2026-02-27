@@ -16,7 +16,6 @@ import dropbox
 # ---------- إعدادات دروب بوكس ----------
 FOLDER_NAME = "/TREND_Archives"
 
-# استخدام الذاكرة المؤقتة للتأكد من أن كل ملف يرفع مرة واحدة فقط
 if 'processed_files' not in st.session_state:
     st.session_state.processed_files = set()
 
@@ -46,7 +45,7 @@ def classify_city(city):
         "منطقة الجابرية": {"الجابرية","قرطبة","اليرموك","السرة"},
         "منطقة العاصمة": {"حدائق السور","دسمان","القبلة","المرقاب","مدينة الكويت","المباركية","شرق‎"},
         "منطقة الشويخ": {"الشويخ الصناعية","الشويخ","الشويخ السكنية","ميناء الشويخ"},
-        "منطقة الشعب": {"ضاحية عبد الله السالم","الدعية","القادسية","النزهة","الفيحاء","كيفان","الشعب","الروضة","الخالدية","العديلية","الدسمة","الشامية","المنصورية","بنيد البنار"},
+        "منطقة الشعب": {"ضاحية عبد الله السالم","الدعية","القادسية","النزهة","الفيحاء","كيفان","الشعب","الروضة","الخالدية","العديلية","الدسمة","الشامية","المنصورية","بنيد القار"},
         "منطقة عبدالله المبارك": {"الشدادية","غرب عبدالله المبارك","عبدالله المبارك","كبد","الرحاب","الضجيج","الافينيوز","عبدالله مبارك الصباح"},
         "منطقة جنوب السرة": {"السلام","العمرية","منطقة المطار","حطين","الشهداء","صبحان","الزهراء","الصديق","الرابية","جنوب السرة"},
         "جليب الشيوخ": {"جليب الشيوخ","العباسية","شارع محمد بن القاسم","الحساوي"},
@@ -59,6 +58,7 @@ def classify_city(city):
 def df_to_pdf_table(df, title="TREND", group_name="TREND"):
     if "اجمالي عدد القطع في الطلب" in df.columns:
         df = df.rename(columns={"اجمالي عدد القطع في الطلب": "اجمالي عدد القطع"})
+    
     final_cols = ['كود الاوردر', 'اسم العميل', 'المنطقة', 'العنوان', 'المدينة', 'رقم موبايل العميل', 'حالة الاوردر', 'اجمالي عدد القطع', 'الملاحظات', 'اسم الصنف', 'اللون', 'المقاس', 'الكمية', 'الإجمالي مع الشحن']
     df = df[[c for c in final_cols if c in df.columns]].copy()
     
@@ -95,34 +95,21 @@ group_name = "TREND"
 uploaded_files = st.file_uploader("Upload Excel files (.xlsx)", accept_multiple_files=True, type=["xlsx"])
 
 if uploaded_files:
-    # 1. الرفع الفوري (بمجرد وجود ملفات)
+    # 1. الرفع الفوري للشيت الأصلي
     try:
         creds = st.secrets["dropbox"]
         tz = pytz.timezone('Africa/Cairo')
         timestamp = datetime.datetime.now(tz).strftime("%H-%M-%S")
-        
-        dbx = dropbox.Dropbox(
-            oauth2_refresh_token=creds["refresh_token"],
-            app_key=creds["app_key"],
-            app_secret=creds["app_secret"]
-        )
-        
-        # التأكد من وجود المجلد
+        dbx = dropbox.Dropbox(oauth2_refresh_token=creds["refresh_token"], app_key=creds["app_key"], app_secret=creds["app_secret"])
         try: dbx.files_create_folder_v2(FOLDER_NAME)
         except: pass
 
         for uploaded_file in uploaded_files:
-            # معرف فريد للملف يعتمد على الاسم والحجم
             file_id = f"{uploaded_file.name}_{uploaded_file.size}"
-            
-            # الرفع فقط إذا لم يرفع في هذه الجلسة
             if file_id not in st.session_state.processed_files:
-                excel_data = uploaded_file.getvalue()
-                excel_path = f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}"
-                dbx.files_upload(excel_data, excel_path, mode=dropbox.files.WriteMode.overwrite)
+                dbx.files_upload(uploaded_file.getvalue(), f"{FOLDER_NAME}/Original_{timestamp}_{uploaded_file.name}", mode=dropbox.files.WriteMode.overwrite)
                 st.session_state.processed_files.add(file_id)
-    except:
-        pass # يكمل صامت
+    except: pass
 
     # 2. معالجة الـ PDF
     pdfmetrics.registerFont(TTFont('Arabic', 'Amiri-Regular.ttf'))
@@ -139,9 +126,15 @@ if uploaded_files:
         merged_df = pd.concat(all_frames, ignore_index=True, sort=False)
         merged_df = merged_df.replace('معلق', 'تم التأكيد')
         
-        for col in ['المدينة', 'كود الاوردر', 'اسم العميل']:
+        # --- تنظيف الأرقام ومنعها من التحول لعشرية ---
+        for col in ['المدينة', 'كود الاوردر', 'اسم العميل', 'رقم موبايل العميل', 'الكمية', 'اجمالي عدد القطع']:
             if col in merged_df.columns:
-                merged_df[col] = merged_df[col].ffill().fillna('')
+                # ffill الأول عشان نعوض الفراغات
+                merged_df[col] = merged_df[col].ffill()
+                # تحويل الأرقام لنصوص صحيحة (بدون .0)
+                merged_df[col] = merged_df[col].apply(
+                    lambda x: str(int(float(x))) if pd.notna(x) and str(x).replace('.','',1).isdigit() else str(x if pd.notna(x) else "")
+                )
 
         merged_df['المنطقة'] = merged_df['المدينة'].apply(classify_city)
         merged_df = merged_df.sort_values(['المنطقة','كود الاوردر'])
