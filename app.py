@@ -21,7 +21,7 @@ def fix_arabic(text):
     if pd.isna(text): return ""
     reshaped = arabic_reshaper.reshape(str(text))
     return get_display(reshaped)
-'''
+
 def classify_city(city):
     if pd.isna(city) or str(city).strip() == '': return "Other City"
     city = str(city).strip()
@@ -55,7 +55,7 @@ def classify_city(city):
         "جليب الشيوخ": {"جليب الشيوخ","العباسية","شارع محمد بن القاسم","الحساوي"},
         "المطلاع": {"المطلاع","العبدلي","السكراب"},
     }
-    '''
+    
     for area, cities in city_map.items():
         if city in cities: return area
     return "Other City"
